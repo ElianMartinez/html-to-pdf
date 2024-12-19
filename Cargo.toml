@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wkhtmltopdf = "0.4"
-anyhow = "1.0"
+headless_chrome = "1.0.15"
 tokio = { version = "1.28", features = ["full"] }
+anyhow = "1.0"
