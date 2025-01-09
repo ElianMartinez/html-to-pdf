@@ -34,6 +34,7 @@ sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio"] }
 chrono = { version = "*", features = ["serde"] }
 dotenv = "0.15"
 lettre = { version = "0.11", features = ["tokio1", "tokio1-native-tls", "smtp-transport"] }
+openssl = { version = "0.10", features = ["vendored"] }
 
 # Para tests
 # (Aunque no siempre son necesarios en el Cargo si no haces macros, etc.)

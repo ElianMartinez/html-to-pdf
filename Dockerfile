@@ -1,13 +1,4 @@
-FROM rust:1.83.0-alpine
-
-# Instalar dependencias necesarias
-RUN apk add --no-cache \
-    musl-dev \
-    openssl-dev \
-    openssl-libs-static \
-    pkgconfig \
-    sqlite-dev \
-    sqlite-static
+FROM messense/rust-musl-cross:x86_64-musl
 
 WORKDIR /usr/src/app
 COPY . .
@@ -16,4 +7,5 @@ COPY . .
 ENV OPENSSL_STATIC=1
 ENV OPENSSL_DIR=/usr
 
-RUN cargo build --release
+# Compilar estáticamente
+RUN cargo build --target x86_64-unknown-linux-musl --release
