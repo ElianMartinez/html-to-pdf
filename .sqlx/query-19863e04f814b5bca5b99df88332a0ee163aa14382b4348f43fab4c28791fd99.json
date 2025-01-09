@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO emails (\n                id,\n                operation_id,\n                recipient,\n                subject,\n                body,\n                status,\n                created_at\n            )\n            VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "19863e04f814b5bca5b99df88332a0ee163aa14382b4348f43fab4c28791fd99"
+}

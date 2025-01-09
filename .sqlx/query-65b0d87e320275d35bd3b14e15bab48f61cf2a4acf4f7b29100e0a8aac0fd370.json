@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT status, error_message\n            FROM emails\n            WHERE operation_id = ?1\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "status",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "65b0d87e320275d35bd3b14e15bab48f61cf2a4acf4f7b29100e0a8aac0fd370"
+}

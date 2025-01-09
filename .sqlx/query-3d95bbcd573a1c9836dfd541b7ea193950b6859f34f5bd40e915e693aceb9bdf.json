@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                        UPDATE emails\n                        SET status = 'failed', error_message = ?1\n                        WHERE operation_id = ?2\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "3d95bbcd573a1c9836dfd541b7ea193950b6859f34f5bd40e915e693aceb9bdf"
+}

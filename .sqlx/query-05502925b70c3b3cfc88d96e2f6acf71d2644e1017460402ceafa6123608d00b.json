@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id, operation_type, status, error_message,\n                is_async, created_at, updated_at, metadata\n            FROM operations\n            ORDER BY created_at DESC\n            LIMIT ?1 OFFSET ?2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "operation_type",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "error_message",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_async",
+        "ordinal": 4,
+        "type_info": "Int64"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 7,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "05502925b70c3b3cfc88d96e2f6acf71d2644e1017460402ceafa6123608d00b"
+}

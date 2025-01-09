@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT COUNT(*) as cnt FROM operations",
+  "describe": {
+    "columns": [
+      {
+        "name": "cnt",
+        "ordinal": 0,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a4654d68934714e89c184aaf3226d90352bc07b016c639218adc95e6e11f95f7"
+}
