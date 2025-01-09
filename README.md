@@ -33,17 +33,79 @@ Servicio en Rust (Actix Web) para generación de PDFs y envío de emails con ges
 
 - El servicio usa chromiumoxide, el cual lanza Chrome/Chromium en modo headless
 - Instalación:
+  <details>
+  <summary>Linux (Debian/Ubuntu)</summary>
 
   ```bash
-  # Linux (Debian/Ubuntu)
+  sudo apt-get update
   sudo apt-get install chromium-browser
+  # o en algunos sistemas:
+  sudo apt-get install chromium
+  ```
 
-  # Linux (Fedora)
-  sudo dnf install chromium
+  </details>
 
-  # macOS
+  <details>
+  <summary>Linux (Fedora)</summary>
+
+  ```bash
+  sudo dnf install chromium chromium-headless chromedriver
+  ```
+
+  </details>
+
+  <details>
+  <summary>Linux (CentOS 7)</summary>
+
+  ```bash
+  # Habilitar EPEL repository
+  sudo yum install epel-release
+
+  # Instalar Chromium
+  sudo yum install chromium chromium-headless chromedriver
+  ```
+
+  </details>
+
+  <details>
+  <summary>Linux (CentOS 8/Rocky Linux/AlmaLinux)</summary>
+
+  ```bash
+  # Habilitar EPEL repository
+  sudo dnf install epel-release
+
+  # Instalar Chromium
+  sudo dnf install chromium chromium-headless chromedriver
+  ```
+
+  </details>
+
+  <details>
+  <summary>Linux (Arch/Manjaro)</summary>
+
+  ```bash
+  sudo pacman -S chromium
+  ```
+
+  </details>
+
+  <details>
+  <summary>Linux (openSUSE)</summary>
+
+  ```bash
+  sudo zypper install chromium chromium-headless
+  ```
+
+  </details>
+
+  <details>
+  <summary>macOS</summary>
+
+  ```bash
   brew install chromium
   ```
+
+  </details>
 
 ### SQLite:
 
@@ -80,7 +142,104 @@ sudo apt-get install -y \
     pkg-config \
     chromium-browser \
     sqlite3 \
-    build-essential
+    build-essential \
+    curl \
+    gcc \
+    make
+```
+
+</details>
+
+<details>
+<summary>Linux (Fedora)</summary>
+
+```bash
+sudo dnf install \
+    openssl-devel \
+    pkg-config \
+    chromium \
+    sqlite \
+    sqlite-devel \
+    gcc \
+    make \
+    curl \
+    perl-core
+```
+
+</details>
+
+<details>
+<summary>Linux (CentOS 7)</summary>
+
+```bash
+# Habilitar EPEL
+sudo yum install epel-release
+
+# Instalar dependencias
+sudo yum install \
+    openssl-devel \
+    pkg-config \
+    chromium \
+    sqlite \
+    sqlite-devel \
+    gcc \
+    make \
+    curl \
+    perl-core
+```
+
+</details>
+
+<details>
+<summary>Linux (CentOS 8/Rocky Linux/AlmaLinux)</summary>
+
+```bash
+# Habilitar EPEL
+sudo dnf install epel-release
+
+# Instalar dependencias
+sudo dnf install \
+    openssl-devel \
+    pkg-config \
+    chromium \
+    sqlite \
+    sqlite-devel \
+    gcc \
+    make \
+    curl \
+    perl-core
+```
+
+</details>
+
+<details>
+<summary>Linux (Arch/Manjaro)</summary>
+
+```bash
+sudo pacman -S \
+    openssl \
+    pkg-config \
+    chromium \
+    sqlite \
+    base-devel \
+    curl
+```
+
+</details>
+
+<details>
+<summary>Linux (openSUSE)</summary>
+
+```bash
+sudo zypper install \
+    libopenssl-devel \
+    pkg-config \
+    chromium \
+    sqlite3 \
+    sqlite3-devel \
+    gcc \
+    make \
+    curl
 ```
 
 </details>
