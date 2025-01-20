@@ -11,13 +11,13 @@ ENV CARGO_PROFILE_RELEASE_LTO="true"
 ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS="1"
 ENV CARGO_PROFILE_RELEASE_OPT_LEVEL="3"
 
-# Install dependencies with version pinning
+# Install dependencies
 RUN apk add --no-cache \
-    build-base=0.5-r3 \
-    perl=5.36.1-r2 \
-    pkgconfig=1.8.1-r1 \
-    musl-dev=1.2.4-r1 \
-    openssl-dev=3.1.4-r2 \
+    build-base \
+    perl \
+    pkgconfig \
+    musl-dev \
+    openssl-dev \
     x86_64-linux-musl-cross
 
 # Add musl target
@@ -47,12 +47,12 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Install runtime dependencies
 RUN apk add --no-cache \
-    chromium=112.0.5615.165-r0 \
-    harfbuzz=7.0.0-r0 \
-    freetype=2.12.1-r0 \
-    nss=3.89.1-r0 \
-    ttf-freefont=20120503-r4 \
-    tini=0.19.0-r1
+    chromium \
+    harfbuzz \
+    freetype \
+    nss \
+    ttf-freefont \
+    tini
 
 WORKDIR /app
 RUN mkdir /app/data && chown -R appuser:appgroup /app
