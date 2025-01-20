@@ -20,20 +20,17 @@ RUN apk add --no-cache \
     perl \
     pkgconfig
 
-# Add musl target for Rust
-RUN rustup target add x86_64-unknown-linux-musl
-
 # Cache dependencies
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
-    cargo build --release --target x86_64-unknown-linux-musl && \
+    cargo build --release && \
     rm -rf src
 
 # Build application
 COPY . .
-RUN cargo build --release --target x86_64-unknown-linux-musl && \
-    strip target/x86_64-unknown-linux-musl/release/pdf_service
+RUN cargo build --release && \
+    strip target/release/pdf_service
 
 # =====================
 # Etapa 2: RUNTIME (Alpine)
