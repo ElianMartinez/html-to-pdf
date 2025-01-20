@@ -17,13 +17,10 @@ RUN apk add --no-cache \
     perl \
     pkgconfig \
     musl-dev \
-    openssl-dev \
-    x86_64-linux-musl-cross
+    openssl-dev
 
 # Add musl target
 RUN rustup target add x86_64-unknown-linux-musl
-
-ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc
 
 # Cache dependencies
 COPY Cargo.toml Cargo.lock ./
