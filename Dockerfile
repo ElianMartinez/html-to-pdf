@@ -11,10 +11,16 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and build
-COPY Cargo.toml Cargo.lock ./
-COPY src src/
-RUN cargo build --release
+
+# Install sqlx-cli
+RUN cargo install sqlx-cli --no-default-features --features native-tls,sqlite
+
+# Copy entire project
+COPY . .
+
+# Set DATABASE_URL and prepare sqlx
+ENV DATABASE_URL="sqlite:///app/data/operations.db"
+RUN cargo sqlx prepare --check && cargo build --release
 
 # Runtime Stage
 FROM debian:bullseye-slim
