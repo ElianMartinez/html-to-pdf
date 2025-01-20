@@ -1,59 +1,38 @@
-# =====================
-# Etapa 1: BUILD (Alpine)
-# =====================
-FROM rust:1.84.0-alpine AS builder
+# Build Stage
+FROM rust:1.84-slim-bullseye AS builder
 
 WORKDIR /app
 
-# Add optimization env vars
-ENV RUSTFLAGS="-C target-cpu=native -C opt-level=3 -C lto=thin"
-ENV CARGO_PROFILE_RELEASE_LTO="true"
-ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS="1"
-ENV CARGO_PROFILE_RELEASE_OPT_LEVEL="3"
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN apk add --no-cache \
-    build-base \
-    musl-dev \
-    musl-tools \
-    openssl-dev \
-    perl \
-    pkgconfig
-
-# Cache dependencies
+# Copy and build
 COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
+COPY src src/
+RUN cargo build --release
 
-# Build application
-COPY . .
-RUN cargo build --release && \
-    strip target/release/pdf_service
-
-# =====================
-# Etapa 2: RUNTIME (Alpine)
-# =====================
-FROM alpine:3.18
-
-# Security: Run as non-root
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Runtime Stage
+FROM debian:bullseye-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     chromium \
-    harfbuzz \
-    freetype \
-    nss \
-    ttf-freefont \
-    tini
+    fonts-freefont-ttf \
+    libssl1.1 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -ms /bin/bash appuser
 
 WORKDIR /app
-RUN mkdir /app/data && chown -R appuser:appgroup /app
+RUN mkdir /app/data && chown -R appuser:appuser /app
 
 # Copy binary
-COPY --from=builder --chown=appuser:appgroup /app/target/x86_64-unknown-linux-musl/release/pdf_service /usr/local/bin/pdf_service
+COPY --from=builder --chown=appuser:appuser /app/target/release/pdf_service /usr/local/bin/pdf_service
 
 VOLUME /app/data
 EXPOSE 5022
@@ -61,5 +40,4 @@ EXPOSE 5022
 ENV RUST_LOG=info
 USER appuser
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["pdf_service"]
+CMD ["/usr/local/bin/pdf_service"]
