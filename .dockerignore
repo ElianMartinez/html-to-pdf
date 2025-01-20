@@ -1,0 +1,10 @@
+# Ignorar build artifacts, cachés, etc.
+target/
+.git/
+.gitignore
+Dockerfile
+docker-compose.yml
+node_modules/
+dist/
+logs/
+*.log

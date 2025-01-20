@@ -1,0 +1,19 @@
+services:
+  pdf_service:
+    # En lugar de "build: ." usa la imagen que subiste a Docker Hub
+    image: elianmartinez157/pdfmail-service:latest
+
+    container_name: pdf_service_container
+    ports:
+      - "5022:5022"
+    volumes:
+      # Mapea tu carpeta local "data" a la carpeta "/app/data" dentro del contenedor.
+      - ./data:/app/data
+      # Mapea tu fichero local ".env" a "/app/.env" en modo lectura.
+      - ./.env:/app/.env:ro
+    # (Opcional) Si prefieres variables de entorno, podrías usar:
+    # env_file:
+    #   - .env
+
+    environment:
+      RUST_LOG: "info"

@@ -16,3 +16,5 @@ Icon
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 pdf_service
+data/operations.db-shm
+data/operations.db-wal

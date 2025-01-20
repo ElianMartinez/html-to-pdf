@@ -1,0 +1,31 @@
+name: Build and push Docker image
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build and push Docker image (amd64 only)
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: Dockerfile
+          # SOLO amd64
+          platforms: linux/amd64
+          push: true
+          # Etiquetamos con tu usuario y nombre de imagen
+          tags: |
+            elianmartinez157/pdf_service:latest

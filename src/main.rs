@@ -68,7 +68,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Levantar servidor
-    log::info!("Levantando servidor en 127.0.0.1:5022");
+    log::info!("Levantando servidor en 0.0.0.0:5022");
     HttpServer::new(move || {
         App::new()
             // Aumentar límite si recibes JSON muy grandes
@@ -79,7 +79,7 @@ async fn main() -> std::io::Result<()> {
             .configure(app::init_app)
     })
     .workers(1)
-    .bind(("127.0.0.1", 5022))?
+    .bind(("0.0.0.0", 5022))?
     .run()
     .await
 }
