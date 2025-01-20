@@ -14,12 +14,13 @@ ENV CARGO_PROFILE_RELEASE_OPT_LEVEL="3"
 # Install dependencies
 RUN apk add --no-cache \
     build-base \
-    perl \
-    pkgconfig \
     musl-dev \
-    openssl-dev
+    musl-tools \
+    openssl-dev \
+    perl \
+    pkgconfig
 
-# Add musl target
+# Add musl target for Rust
 RUN rustup target add x86_64-unknown-linux-musl
 
 # Cache dependencies
