@@ -1,7 +1,7 @@
 services:
   pdf_service:
     # En lugar de "build: ." usa la imagen que subiste a Docker Hub
-    image: elianmartinez157/pdfmail-service:latest
+    image: elianmartinez157/pdf_service:latest
 
     container_name: pdf_service_container
     ports:

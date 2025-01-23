@@ -10,7 +10,6 @@ use crate::services::pdf_service::PdfService;
 
 mod app;
 mod config;
-mod errors;
 mod handlers;
 mod logger;
 mod models;

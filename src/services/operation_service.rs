@@ -8,7 +8,7 @@ use crate::models::operation_model::{
     OperationStatusResponse,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OperationService {
     db_pool: Pool<Sqlite>,
 }
@@ -167,5 +167,43 @@ impl OperationService {
             page_size,
             items,
         })
+    }
+
+    pub async fn mark_operation_failed(
+        &self,
+        op_id: &str,
+        error: String,
+    ) -> Result<(), anyhow::Error> {
+        sqlx::query!(
+            r#"UPDATE operations 
+            SET status = 'failed', 
+                error_message = ?, 
+                updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?"#,
+            error,
+            op_id
+        )
+        .execute(&self.db_pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_operation_status(
+        &self,
+        operation_id: &str,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"UPDATE operations SET status = ?1, error_message = ?2 WHERE id = ?3"#,
+            status,
+            error,
+            operation_id
+        )
+        .execute(&self.db_pool)
+        .await
+        .context("Failed to update operation status")?;
+        Ok(())
     }
 }

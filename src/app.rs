@@ -25,7 +25,14 @@ pub fn init_app(cfg: &mut web::ServiceConfig) {
             )
             .service(
                 web::scope("/email")
+                    // Endpoint original para enviar emails
                     .route("/send", web::post().to(email_handler::send_email_endpoint))
+                    // Nuevo endpoint para email + PDF
+                    .route(
+                        "/send-with-pdf",
+                        web::post().to(email_handler::send_email_with_pdf_endpoint),
+                    )
+                    // Consulta de estado
                     .route(
                         "/status/{op_id}",
                         web::get().to(email_handler::email_status_endpoint),
