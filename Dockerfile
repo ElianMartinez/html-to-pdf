@@ -20,7 +20,7 @@ COPY . .
 
 # Set DATABASE_URL and prepare sqlx
 ENV DATABASE_URL="sqlite:///app/data/operations.db"
-RUN cargo sqlx prepare --check && cargo build --release
+RUN cargo build --release
 
 # Runtime Stage
 FROM debian:bullseye-slim
