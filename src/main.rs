@@ -2,7 +2,6 @@ use actix_web::{web, App, HttpServer};
 use dotenv::dotenv;
 use sqlx::{Pool, Sqlite};
 
-use crate::config::pdf_config::PdfGlobalConfig;
 use crate::logger::init_logger;
 use crate::services::email_service::EmailService;
 use crate::services::operation_service::OperationService;

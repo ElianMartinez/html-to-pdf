@@ -1,4 +1,4 @@
-use crate::models::pdf_model::{PaperSize, PdfMargins, PdfOrientation, PdfPagePreset, PdfRequest};
+use crate::models::pdf_model::{PdfMargins, PdfOrientation, PdfPagePreset, PdfRequest};
 use anyhow::{anyhow, Context, Result};
 use std::{
     fs,
