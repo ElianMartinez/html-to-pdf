@@ -1,4 +1,5 @@
 //! app.rs
+
 use crate::handlers::{email_handler, operation_handler, pdf_handler};
 use actix_web::web;
 
@@ -25,12 +26,9 @@ pub fn init_app(cfg: &mut web::ServiceConfig) {
             )
             .service(
                 web::scope("/email")
-                    // Endpoint original para enviar emails
-                    .route("/send", web::post().to(email_handler::send_email_endpoint))
-                    // Nuevo endpoint para email + PDF
                     .route(
-                        "/send-with-pdf",
-                        web::post().to(email_handler::send_email_with_pdf_endpoint),
+                        "/send",
+                        web::post().to(email_handler::send_universal_email_endpoint),
                     )
                     // Consulta de estado
                     .route(

@@ -58,34 +58,6 @@ impl OperationService {
         })
     }
 
-    /// Actualiza estado y error
-    pub async fn update_operation(
-        &self,
-        op_id: &str,
-        new_status: &str,
-        error_message: Option<&str>,
-    ) -> Result<()> {
-        let now = Utc::now().to_rfc3339();
-        sqlx::query!(
-            r#"
-            UPDATE operations
-            SET status = ?2,
-                error_message = ?3,
-                updated_at = ?4
-            WHERE id = ?1
-            "#,
-            op_id,
-            new_status,
-            error_message,
-            now
-        )
-        .execute(&self.db_pool)
-        .await
-        .context("Fallo al actualizar operación")?;
-
-        Ok(())
-    }
-
     /// Obtiene la info de una operación
     pub async fn get_operation(&self, op_id: &str) -> Result<OperationRecord> {
         let row = sqlx::query!(

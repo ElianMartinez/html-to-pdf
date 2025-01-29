@@ -1,137 +1,20 @@
-use crate::{
-    models::email_model::{SendEmailRequest, SendEmailWithPdfRequest},
-    services::operation_service::OperationService,
-    services::{email_service::EmailService, pdf_service::PdfService},
-};
+//! handlers/email_handler.rs
+
 use actix_web::{web, HttpResponse};
 use serde_json::json;
 
-/// POST /api/email/send
-pub async fn send_email_endpoint(
-    email_service: web::Data<EmailService>,
-    body: web::Json<SendEmailRequest>,
-) -> HttpResponse {
-    let req_data = body.into_inner();
-
-    match email_service.send_email(req_data).await {
-        Ok(op_id) => HttpResponse::Ok().json(json!({
-            "success": true,
-            "operation_id": op_id,
-            "message": "Email processing started"
-        })),
-        Err(e) => {
-            log::error!("Email send error: {}", e);
-            HttpResponse::InternalServerError().json(json!({
-                "success": false,
-                "error": e.to_string()
-            }))
-        }
-    }
-}
-
-/// POST /api/email/send-with-pdf
-pub async fn send_email_with_pdf_endpoint(
-    email_service: web::Data<EmailService>,
-    pdf_service: web::Data<PdfService>,
-    op_service: web::Data<OperationService>,
-    body: web::Json<SendEmailWithPdfRequest>,
-) -> HttpResponse {
-    let body_data = body.into_inner();
-
-    // 1. Crear operación combinada
-    let create_op_req = crate::models::operation_model::CreateOperationRequest {
-        operation_type: "email_with_pdf".to_string(),
-        is_async: body_data.async_send,
-        metadata: Some(
-            json!({
-                "recipient": body_data.recipient,
-                "subject": body_data.subject,
-                "pdf_attachment": body_data.pdf_attachment_name
-            })
-            .to_string(),
-        ),
-    };
-
-    let op_id = match op_service.create_operation(create_op_req).await {
-        Ok(resp) => resp.id,
-        Err(e) => {
-            return HttpResponse::InternalServerError().json(json!({
-                "success": false,
-                "error": format!("Operation creation failed: {}", e)
-            }))
-        }
-    };
-
-    // 2. Generar PDF
-    let pdf_request = crate::models::pdf_model::PdfRequest {
-        file_name: body_data
-            .pdf_attachment_name
-            .clone()
-            .unwrap_or_else(|| "document.pdf".to_string()),
-        html: body_data.pdf_html,
-        orientation: body_data.pdf_orientation,
-        paper_size: body_data.pdf_paper_size,
-        margins: body_data.pdf_margins,
-        size_category: body_data.pdf_size_category,
-    };
-
-    let pdf_bytes = match pdf_service.generate_pdf(pdf_request).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            let _ = op_service
-                .mark_operation_failed(&op_id, format!("PDF generation failed: {}", e))
-                .await;
-            return HttpResponse::InternalServerError().json(json!({
-                "success": false,
-                "operation_id": op_id,
-                "error": format!("PDF Error: {}", e)
-            }));
-        }
-    };
-
-    // 3. Crear adjunto
-    let attachment = crate::models::email_model::EmailAttachment {
-        filename: body_data
-            .pdf_attachment_name
-            .unwrap_or_else(|| "document.pdf".to_string()),
-        content_type: "application/pdf".to_string(),
-        data: pdf_bytes,
-    };
-
-    // 4. Construir y enviar email
-    let email_req = SendEmailRequest {
-        smtp_host: body_data.smtp_host,
-        smtp_port: body_data.smtp_port,
-        smtp_user: body_data.smtp_user,
-        smtp_pass: body_data.smtp_pass,
-        recipient: body_data.recipient,
-        subject: body_data.subject,
-        body: body_data.body,
-        async_send: body_data.async_send,
-        attachments: Some(vec![attachment]),
-    };
-
-    match email_service.send_email(email_req).await {
-        Ok(_) => HttpResponse::Ok().json(json!({
-            "success": true,
-            "operation_id": op_id,
-            "message": "Email with PDF queued successfully"
-        })),
-        Err(e) => {
-            let _ = op_service
-                .mark_operation_failed(&op_id, format!("Email send failed: {}", e))
-                .await;
-
-            HttpResponse::InternalServerError().json(json!({
-                "success": false,
-                "operation_id": op_id,
-                "error": format!("Email Error: {}", e)
-            }))
-        }
-    }
-}
+use crate::{
+    models::{
+        email_model::SendUniversalEmailRequest, operation_model::CreateOperationRequest,
+        pdf_model::PdfRequest,
+    },
+    services::{
+        email_service::EmailService, operation_service::OperationService, pdf_service::PdfService,
+    },
+};
 
 /// GET /api/email/status/{op_id}
+/// Devuelve el estado de un envío de correo (por operation_id).
 pub async fn email_status_endpoint(
     email_service: web::Data<EmailService>,
     path: web::Path<String>,
@@ -153,6 +36,123 @@ pub async fn email_status_endpoint(
             HttpResponse::build(status_code).json(json!({
                 "success": false,
                 "error": e.to_string()
+            }))
+        }
+    }
+}
+
+// =====================================================================================================
+// ENDPOINT UNIFICADO: POST /api/email/send-unified
+// Maneja:
+//  - Envío a múltiples destinatarios
+//  - Generación PDF opcional
+//  - Adjuntos opcionales
+//  - Síncrono o asíncrono
+// =====================================================================================================
+pub async fn send_universal_email_endpoint(
+    email_service: web::Data<EmailService>,
+    pdf_service: web::Data<PdfService>,
+    op_service: web::Data<OperationService>,
+    body: web::Json<SendUniversalEmailRequest>,
+) -> HttpResponse {
+    let mut req_body = body.into_inner();
+
+    // 1. Crear la operación
+    let create_op_req = CreateOperationRequest {
+        operation_type: "send_unified_email".to_string(),
+        is_async: req_body.async_send,
+        metadata: Some(
+            json!({
+                "recipients": req_body.recipients,
+                "subject": req_body.subject,
+                "pdf_planned": req_body.pdf_html.is_some(),
+                "other_attachments": req_body.other_attachments.as_ref().map(|a| a.len()).unwrap_or(0)
+            })
+            .to_string(),
+        ),
+    };
+
+    let op_id = match op_service.create_operation(create_op_req).await {
+        Ok(resp) => resp.id,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(json!({
+                "success": false,
+                "error": format!("Operation creation failed: {}", e)
+            }))
+        }
+    };
+
+    // 2. Revisar si hay que generar PDF
+    let mut final_attachments = vec![];
+
+    if let Some(html) = req_body.pdf_html.take() {
+        // Construir PdfRequest usando el nuevo modelo
+        let pdf_request = PdfRequest {
+            file_name: req_body
+                .pdf_attachment_name
+                .clone()
+                .unwrap_or_else(|| "document.pdf".to_string()),
+            html,
+            orientation: req_body.pdf_orientation.clone(), // Add .clone() here
+            page_size_preset: req_body.pdf_page_size_preset.clone(),
+            custom_page_size: req_body.pdf_custom_page_size.clone(),
+            margins: req_body.pdf_margins.clone(),
+            scale: req_body.pdf_scale.clone(), // Add .clone() here if scale is not Copy
+        };
+
+        // Llamamos a pdf_service
+        let pdf_bytes = match pdf_service.generate_pdf(pdf_request).await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                // Marcamos la operación como fallida
+                let _ = op_service
+                    .mark_operation_failed(&op_id, format!("PDF generation failed: {}", e))
+                    .await;
+                return HttpResponse::InternalServerError().json(json!({
+                    "success": false,
+                    "operation_id": op_id,
+                    "error": format!("PDF Error: {}", e)
+                }));
+            }
+        };
+
+        // Agregamos el PDF a la lista de adjuntos
+        final_attachments.push(crate::models::email_model::EmailAttachment {
+            filename: req_body
+                .pdf_attachment_name
+                .as_ref()
+                .map(|s| s.clone())
+                .unwrap_or_else(|| "document.pdf".to_string()),
+            content_type: "application/pdf".to_string(),
+            data: pdf_bytes,
+        });
+    }
+
+    // 3. Adjuntos adicionales
+    if let Some(ref mut other_files) = req_body.other_attachments {
+        final_attachments.append(other_files);
+    }
+
+    // 4. Llamar al servicio unificado
+    match email_service
+        .send_unified(op_id.clone(), req_body, final_attachments)
+        .await
+    {
+        Ok(_) => HttpResponse::Ok().json(json!({
+            "success": true,
+            "operation_id": op_id,
+            "message": "Unified email queued/sent successfully"
+        })),
+        Err(e) => {
+            // Marcar operación fallida en caso de error
+            let _ = op_service
+                .mark_operation_failed(&op_id, format!("Email send failed: {}", e))
+                .await;
+
+            HttpResponse::InternalServerError().json(json!({
+                "success": false,
+                "operation_id": op_id,
+                "error": format!("Email Error: {}", e)
             }))
         }
     }

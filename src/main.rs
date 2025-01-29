@@ -42,8 +42,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok(); // Cargar .env al inicio
     init_logger();
 
-    let pdf_config = PdfGlobalConfig::default();
-    let pdf_service = PdfService::new(pdf_config)
+    let pdf_service = PdfService::new()
         .await
         .expect("No se pudo inicializar PdfService");
 
