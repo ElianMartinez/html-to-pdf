@@ -71,7 +71,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             // Aumentar límite si recibes JSON muy grandes
-            .app_data(web::JsonConfig::default().limit(20 * 1024 * 1024))
+            .app_data(web::JsonConfig::default().limit(500 * 1024 * 1024))
             .app_data(web::Data::new(pdf_service.clone()))
             .app_data(web::Data::new(operation_service.clone()))
             .app_data(web::Data::new(email_service.clone()))

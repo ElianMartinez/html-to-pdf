@@ -19,6 +19,7 @@ pub struct PaperSize {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PdfRequest {
+    pub file_name: String,
     /// HTML que vamos a renderizar.
     pub html: String,
 
@@ -47,6 +48,7 @@ impl PdfRequest {
     #[cfg(test)]
     pub fn test_new(html: String) -> Self {
         Self {
+            file_name: "test.pdf".to_string(),
             html,
             orientation: None,
             paper_size: None,

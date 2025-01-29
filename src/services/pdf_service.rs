@@ -169,8 +169,7 @@ impl PdfService {
             let tmp_dir = PathBuf::from("./tmp");
             fs::create_dir_all(&tmp_dir).context("No se pudo crear directorio ./tmp")?;
 
-            let file_name = format!("temp_{}.html", Uuid::new_v4());
-            file_path = tmp_dir.join(&file_name);
+            file_path = tmp_dir.join(&req.file_name);
 
             fs::write(&file_path, &html_str).context("No se pudo escribir HTML en archivo")?;
             let absolute_path = file_path

@@ -64,6 +64,10 @@ pub async fn send_email_with_pdf_endpoint(
 
     // 2. Generar PDF
     let pdf_request = crate::models::pdf_model::PdfRequest {
+        file_name: body_data
+            .pdf_attachment_name
+            .clone()
+            .unwrap_or_else(|| "document.pdf".to_string()),
         html: body_data.pdf_html,
         orientation: body_data.pdf_orientation,
         paper_size: body_data.pdf_paper_size,
