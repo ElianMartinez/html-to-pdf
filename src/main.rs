@@ -31,7 +31,7 @@ async fn setup_database() -> Pool<Sqlite> {
     // 3) Conectarnos con SQLx
     let db_pool = Pool::<Sqlite>::connect(&db_url)
         .await
-        .expect("No se pudo conectar a la base de datos SQLite");
+        .expect("No se pudo conectar a la base de datos SQLite.");
 
     db_pool
 }
