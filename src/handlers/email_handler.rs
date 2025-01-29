@@ -5,7 +5,8 @@ use serde_json::json;
 
 use crate::{
     models::{
-        email_model::SendUniversalEmailRequest, operation_model::CreateOperationRequest,
+        email_model::{EmailAttachment, SendUniversalEmailRequest},
+        operation_model::CreateOperationRequest,
         pdf_model::PdfRequest,
     },
     services::{
@@ -49,13 +50,16 @@ pub async fn email_status_endpoint(
 //  - Adjuntos opcionales
 //  - Síncrono o asíncrono
 // =====================================================================================================
+
+/// POST /api/email/send-unified
 pub async fn send_universal_email_endpoint(
     email_service: web::Data<EmailService>,
     pdf_service: web::Data<PdfService>,
-    op_service: web::Data<OperationService>,
+    _op_service: web::Data<OperationService>,
     body: web::Json<SendUniversalEmailRequest>,
 ) -> HttpResponse {
-    let mut req_body = body.into_inner();
+    let req_body = body.into_inner(); // Convertimos el JSON en struct
+    let op_service_cloned = _op_service.clone();
 
     // 1. Crear la operación
     let create_op_req = CreateOperationRequest {
@@ -72,7 +76,7 @@ pub async fn send_universal_email_endpoint(
         ),
     };
 
-    let op_id = match op_service.create_operation(create_op_req).await {
+    let op_id = match op_service_cloned.create_operation(create_op_req).await {
         Ok(resp) => resp.id,
         Err(e) => {
             return HttpResponse::InternalServerError().json(json!({
@@ -82,46 +86,105 @@ pub async fn send_universal_email_endpoint(
         }
     };
 
-    // 2. Revisar si hay que generar PDF
+    let email_service_cloned = email_service.clone();
+    let pdf_service_cloned = pdf_service.clone();
+
+    // 2. Decidir si se hace asíncrono o síncrono
+    if req_body.async_send {
+        // a) Asíncrono: lanzamos la tarea en background y devolvemos la respuesta de inmediato
+        let op_id_clone = op_id.clone();
+        let req_body_clone = req_body.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = do_full_email_work(
+                op_id_clone.clone(),
+                req_body_clone,
+                email_service_cloned,
+                pdf_service_cloned,
+            )
+            .await
+            {
+                // Marcamos la operación como fallida
+                let _ = op_service_cloned
+                    .mark_operation_failed(&op_id_clone, format!("Async task error: {:?}", e))
+                    .await;
+            } else {
+                log::info!("Async email {} completado con éxito", op_id_clone);
+            }
+        });
+
+        // Inmediatamente respondemos OK, sin haber bloqueado
+        HttpResponse::Ok().json(json!({
+            "success": true,
+            "operation_id": op_id,
+            "message": "Unified email queued for async processing"
+        }))
+    } else {
+        // b) Síncrono: realizamos todo en el mismo hilo
+        match do_full_email_work(
+            op_id.clone(),
+            req_body,
+            email_service.clone(),
+            pdf_service.clone(),
+        )
+        .await
+        {
+            Ok(_) => HttpResponse::Ok().json(json!({
+                "success": true,
+                "operation_id": op_id,
+                "message": "Unified email processed successfully"
+            })),
+            Err(e) => {
+                let _ = _op_service
+                    .mark_operation_failed(&op_id, format!("Email send failed: {}", e))
+                    .await;
+
+                HttpResponse::InternalServerError().json(json!({
+                    "success": false,
+                    "operation_id": op_id,
+                    "error": format!("Email Error: {}", e)
+                }))
+            }
+        }
+    }
+}
+
+/// Función auxiliar para generar PDF (si corresponde),
+/// preparar adjuntos y llamar a `send_unified` en EmailService.
+/// Retorna `Ok(())` si todo fue bien, o `Err(...)` si hubo problemas.
+async fn do_full_email_work(
+    op_id: String,
+    mut req_body: SendUniversalEmailRequest,
+    email_service: web::Data<EmailService>,
+    pdf_service: web::Data<PdfService>,
+) -> Result<(), anyhow::Error> {
+    // 1. Lista de adjuntos final
     let mut final_attachments = vec![];
 
+    // 2. ¿Generar PDF?
     if let Some(html) = req_body.pdf_html.take() {
-        // Construir PdfRequest usando el nuevo modelo
         let pdf_request = PdfRequest {
             file_name: req_body
                 .pdf_attachment_name
                 .clone()
                 .unwrap_or_else(|| "document.pdf".to_string()),
             html,
-            orientation: req_body.pdf_orientation.clone(), // Add .clone() here
+            orientation: req_body.pdf_orientation.clone(),
             page_size_preset: req_body.pdf_page_size_preset.clone(),
             custom_page_size: req_body.pdf_custom_page_size.clone(),
             margins: req_body.pdf_margins.clone(),
-            scale: req_body.pdf_scale.clone(), // Add .clone() here if scale is not Copy
+            scale: req_body.pdf_scale,
         };
 
-        // Llamamos a pdf_service
-        let pdf_bytes = match pdf_service.generate_pdf(pdf_request).await {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                // Marcamos la operación como fallida
-                let _ = op_service
-                    .mark_operation_failed(&op_id, format!("PDF generation failed: {}", e))
-                    .await;
-                return HttpResponse::InternalServerError().json(json!({
-                    "success": false,
-                    "operation_id": op_id,
-                    "error": format!("PDF Error: {}", e)
-                }));
-            }
-        };
+        let pdf_bytes = pdf_service
+            .generate_pdf(pdf_request)
+            .await
+            .map_err(|e| anyhow::anyhow!("Error generando PDF: {}", e))?;
 
-        // Agregamos el PDF a la lista de adjuntos
-        final_attachments.push(crate::models::email_model::EmailAttachment {
+        final_attachments.push(EmailAttachment {
             filename: req_body
                 .pdf_attachment_name
-                .as_ref()
-                .map(|s| s.clone())
+                .clone()
                 .unwrap_or_else(|| "document.pdf".to_string()),
             content_type: "application/pdf".to_string(),
             data: pdf_bytes,
@@ -133,27 +196,13 @@ pub async fn send_universal_email_endpoint(
         final_attachments.append(other_files);
     }
 
-    // 4. Llamar al servicio unificado
-    match email_service
+    // 4. Llamar al método unificado de EmailService
+    //    Esto insertará el registro en tabla `emails`, e iniciará el envío
+    email_service
         .send_unified(op_id.clone(), req_body, final_attachments)
         .await
-    {
-        Ok(_) => HttpResponse::Ok().json(json!({
-            "success": true,
-            "operation_id": op_id,
-            "message": "Unified email queued/sent successfully"
-        })),
-        Err(e) => {
-            // Marcar operación fallida en caso de error
-            let _ = op_service
-                .mark_operation_failed(&op_id, format!("Email send failed: {}", e))
-                .await;
+        .map_err(|e| anyhow::anyhow!("Error en send_unified: {}", e))?;
 
-            HttpResponse::InternalServerError().json(json!({
-                "success": false,
-                "operation_id": op_id,
-                "error": format!("Email Error: {}", e)
-            }))
-        }
-    }
+    // 5. Si llegamos aquí, todo OK
+    Ok(())
 }
