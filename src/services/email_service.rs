@@ -158,7 +158,7 @@ impl EmailService {
         req: &SendUniversalEmailRequest,
         attachments: Vec<EmailAttachment>,
     ) -> Result<()> {
-        let from: Mailbox = format!("PDF Service <{}>", req.smtp_user)
+        let from: Mailbox = format!("Calipso Dynamics <{}>", req.smtp_user)
             .parse()
             .context("Invalid from address")?;
 
