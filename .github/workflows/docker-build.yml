@@ -61,10 +61,11 @@ jobs:
       - name: Deploy to server
         uses: appleboy/ssh-action@master
         with:
-          host: 147.93.46.105
+          host: ${{ secrets.SSH_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            whoami && pwd
             /opt/pdf_service/update.sh
 
   build:
