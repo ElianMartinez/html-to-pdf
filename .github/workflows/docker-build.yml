@@ -85,7 +85,7 @@ jobs:
         run: cargo build --release --target x86_64-unknown-linux-gnu
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pdf_service
           path: target/x86_64-unknown-linux-gnu/release/pdf_service
