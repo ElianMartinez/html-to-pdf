@@ -2,7 +2,7 @@ use crate::models::pdf_model::{PdfMargins, PdfOrientation, PdfPagePreset, PdfReq
 use anyhow::{anyhow, Context, Result};
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -13,9 +13,11 @@ use tokio::{
 };
 use uuid::Uuid;
 
-/// Ej: Manejo de concurrencia
+/// Cantidad máxima de wkhtmltopdf simultáneos
 const MAX_CONCURRENT_PROCESSES: usize = 8;
+/// Tiempo máximo para generar un PDF
 const PDF_GENERATION_TIMEOUT: Duration = Duration::from_secs(120);
+/// Prefijo de carpeta temporal
 const TEMP_DIR_PREFIX: &str = "pdf_service_";
 
 #[derive(Clone)]
@@ -27,11 +29,11 @@ pub struct PdfService {
 
 impl PdfService {
     pub async fn new() -> Result<Self> {
-        // Creas un subdirectorio temporal
+        // Crea un subdirectorio temporal (para HTML/PDF provisionales).
         let temp_dir = std::env::temp_dir().join(format!("{}_{}", TEMP_DIR_PREFIX, Uuid::new_v4()));
         fs::create_dir_all(&temp_dir)?;
 
-        // Verifica la existencia de wkhtmltopdf
+        // Verifica que wkhtmltopdf esté en PATH
         let wkhtmltopdf_path =
             which::which("wkhtmltopdf").context("No se encontró wkhtmltopdf en el sistema")?;
 
@@ -42,16 +44,19 @@ impl PdfService {
         })
     }
 
+    /// Genera un PDF en memoria (Vec<u8>).
+    /// Si `req.store_local_pdf == Some(true)`, además se guarda localmente en ./files/pdfs/
     pub async fn generate_pdf(&self, req: PdfRequest) -> Result<Vec<u8>> {
         let start = Instant::now();
-        // Adquirir permiso (control de concurrencia)
+
+        // Control de concurrencia
         let _guard = self.acquire_permit().await?;
 
-        // Crear archivo HTML y PDF temporales
+        // Crea archivos temporales (HTML y PDF)
         let temp_files = self.create_temp_files(&req.file_name)?;
-        let _cleanup = TempCleanup::new(temp_files.clone()); // para auto-borrar
+        let _cleanup = TempCleanup::new(temp_files.clone()); // al final se borran
 
-        // Escribe el HTML a disco
+        // Escribir HTML a disco
         fs::write(&temp_files.html_path, &req.html).with_context(|| {
             format!(
                 "Error escribiendo HTML temporal en {:?}",
@@ -59,19 +64,40 @@ impl PdfService {
             )
         })?;
 
-        // Construimos el comando
+        // Llamar a wkhtmltopdf
         let pdf_data = self.run_wkhtmltopdf(&req, &temp_files).await?;
+
+        // Si el usuario quiere guardarlo localmente, lo hacemos ahora
+        if req.store_local_pdf.unwrap_or(false) {
+            // Creamos la carpeta si no existe
+            let _ = fs::create_dir_all("./files/pdfs");
+
+            // Generamos un nombre único: "<uuid>_<nombreOriginal>.pdf"
+            let unique_name = format!("{}_{}", req.file_name, Uuid::new_v4());
+
+            let local_path = Path::new("./files/pdfs").join(&unique_name);
+            fs::write(&local_path, &pdf_data)
+                .with_context(|| format!("No se pudo guardar PDF en {:?}", local_path))?;
+
+            log::info!(
+                "PDF guardado localmente en {:?} ({} bytes)",
+                local_path,
+                pdf_data.len()
+            );
+        }
 
         let elapsed = start.elapsed().as_secs_f32();
         log::info!("PDF generado en {:.2}s", elapsed);
+
+        // Retornamos los bytes en memoria (útil si vas a adjuntarlos por email, etc.)
         Ok(pdf_data)
     }
 
     async fn acquire_permit(&self) -> Result<SemaphorePermit> {
         timeout(Duration::from_secs(5), self.semaphore.acquire())
             .await
-            .context("Timeout esperando un permiso de PDFService")?
-            .map_err(|_| anyhow!("No se pudo adquirir semaphore"))
+            .context("Timeout esperando permiso en PdfService")?
+            .map_err(|_| anyhow!("No se pudo adquirir el semaphore"))
     }
 
     fn create_temp_files(&self, base_name: &str) -> Result<TempFiles> {
@@ -84,13 +110,10 @@ impl PdfService {
         })
     }
 
-    /// Aquí traducimos los parámetros del PdfRequest a flags de wkhtmltopdf
     async fn run_wkhtmltopdf(&self, req: &PdfRequest, paths: &TempFiles) -> Result<Vec<u8>> {
-        // 1) Comenzamos con un Command
         let mut cmd = Command::new(&*self.wkhtmltopdf_path);
 
-        // ========== ORIENTACIÓN ==========
-        // Por default, "Portrait"
+        // ===== ORIENTACIÓN =====
         let orientation = req
             .orientation
             .as_ref()
@@ -99,11 +122,9 @@ impl PdfService {
             PdfOrientation::Landscape => "Landscape",
             PdfOrientation::Portrait => "Portrait",
         };
-
         cmd.arg("--orientation").arg(orientation_str);
 
-        // ========== TAMAÑO DE PÁGINA ==========
-        // Si se especifica `page_size_preset` (A4, Letter, etc.), lo usamos:
+        // ===== TAMAÑO DE PÁGINA =====
         if let Some(preset) = &req.page_size_preset {
             let preset_str = match preset {
                 PdfPagePreset::A4 => "A4",
@@ -113,19 +134,15 @@ impl PdfService {
                 PdfPagePreset::Tabloid => "Tabloid",
             };
             cmd.arg("--page-size").arg(preset_str);
-        }
-        // Caso contrario, si existe un tamaño personalizado:
-        else if let Some(custom) = &req.custom_page_size {
-            // Nota: wkhtmltopdf usa milímetros si se pasa a
-            // --page-width/--page-height
+        } else if let Some(custom) = &req.custom_page_size {
             cmd.arg("--page-width").arg(format!("{}mm", custom.width));
             cmd.arg("--page-height").arg(format!("{}mm", custom.height));
         } else {
-            // Si no se especificó nada, default a A4
+            // Default a A4
             cmd.arg("--page-size").arg("A4");
         }
 
-        // ========== MÁRGENES ==========
+        // ===== MÁRGENES =====
         let margins = req.margins.as_ref().unwrap_or(&PdfMargins {
             top: 10.0,
             bottom: 10.0,
@@ -139,39 +156,34 @@ impl PdfService {
         cmd.arg("--margin-right")
             .arg(format!("{}mm", margins.right));
 
-        // ========== ESCALA (zoom) ==========
-        // wkhtmltopdf no tiene flag `--scale`, pero sí `--zoom`
+        // ===== ESCALA (zoom) =====
         let scale = req.scale.unwrap_or(1.0);
         if (scale - 1.0).abs() > f64::EPSILON {
             cmd.arg("--zoom").arg(format!("{}", scale));
         }
 
-        // ========== OTRAS OPCIONES GENÉRICAS ==========
-        // Podrías poner más flags, p. ej.:
-        //    --disable-smart-shrinking, --enable-local-file-access, etc.
+        // ===== OTRAS OPCIONES =====
         cmd.arg("--enable-local-file-access");
         cmd.arg("--print-media-type");
 
-        // Importante: entradas y salida
+        // Entradas/salidas
         cmd.arg(&paths.html_path);
         cmd.arg(&paths.pdf_path);
 
-        // 2) Configuramos redirecciones
         cmd.stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
-        // 3) Ejecutamos con timeout
         let output = timeout(PDF_GENERATION_TIMEOUT, cmd.output())
             .await
-            .context("Timeout generando PDF con wkhtmltopdf")?
-            .context("No se pudo ejecutar wkhtmltopdf")?;
+            .context("Timeout ejecutando wkhtmltopdf")?
+            .context("No se pudo lanzar wkhtmltopdf")?;
 
         if !output.status.success() {
             let stderr_msg = String::from_utf8_lossy(&output.stderr);
             return Err(anyhow!("wkhtmltopdf falló: {}", stderr_msg));
         }
 
-        // 4) Cargamos el PDF generado
+        // Leer el PDF final
         let pdf_bytes = fs::read(&paths.pdf_path)
             .with_context(|| format!("Error leyendo PDF final en {:?}", paths.pdf_path))?;
 
@@ -179,6 +191,9 @@ impl PdfService {
     }
 }
 
+// --------------------------------------------------------------------------------
+// Estructuras auxiliares
+// --------------------------------------------------------------------------------
 #[derive(Clone)]
 struct TempFiles {
     html_path: PathBuf,
@@ -195,7 +210,7 @@ impl TempCleanup {
     }
 }
 
-/// Se encarga de borrar los temporales al salir del scope
+/// Borra los archivos temporales al salir de scope
 impl Drop for TempCleanup {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.files.html_path);

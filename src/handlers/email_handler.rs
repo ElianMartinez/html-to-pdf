@@ -61,6 +61,11 @@ pub async fn send_universal_email_endpoint(
     let req_body = body.into_inner(); // Convertimos el JSON en struct
     let op_service_cloned = _op_service.clone();
 
+    //log html for pdf
+    if let Some(html) = &req_body.pdf_html {
+        log::info!("HTML for PDF: {}", html);
+    }
+
     // 1. Crear la operación
     let create_op_req = CreateOperationRequest {
         operation_type: "send_unified_email".to_string(),
@@ -174,6 +179,7 @@ async fn do_full_email_work(
             custom_page_size: req_body.pdf_custom_page_size.clone(),
             margins: req_body.pdf_margins.clone(),
             scale: req_body.pdf_scale,
+            store_local_pdf: Some(false),
         };
 
         let pdf_bytes = pdf_service

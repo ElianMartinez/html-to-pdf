@@ -1,5 +1,7 @@
 use actix_web::{web, App, HttpServer};
 use dotenv::dotenv;
+use services::notification_channel_service::NotificationChannelService;
+use services::notification_service::NotificationService;
 use sqlx::{Pool, Sqlite};
 
 use crate::logger::init_logger;
@@ -13,7 +15,6 @@ mod handlers;
 mod logger;
 mod models;
 mod services;
-mod tests;
 
 async fn setup_database() -> Pool<Sqlite> {
     // 1) Crear carpeta "data"
@@ -64,15 +65,38 @@ async fn main() -> std::io::Result<()> {
         panic!("Fallo en migraciones de 'emails': {:?}", e);
     }
 
+    // NUEVO: channel service
+    let channel_service = NotificationChannelService::new(db_pool.clone());
+
+    // NotificationService
+    let notification_service = NotificationService::new(
+        db_pool.clone(),
+        email_service.clone(),
+        pdf_service.clone(),
+        operation_service.clone(),
+        channel_service.clone(),
+    );
+
+    // let notif_service_clone = notification_service.clone();
+    // tokio::spawn(async move {
+    //     loop {
+    //         if let Err(e) = notif_service_clone.reattempt_failed_channels().await {
+    //             eprintln!("Error en reintento: {:?}", e);
+    //         }
+    //         tokio::time::sleep(std::time::Duration::from_secs(300)).await; // 5 min
+    //     }
+    // });
+
     // Levantar servidor
     log::info!("Levantando servidor en 0.0.0.0:5022");
     HttpServer::new(move || {
         App::new()
             // Aumentar límite si recibes JSON muy grandes
-            .app_data(web::JsonConfig::default().limit(500 * 1024 * 1024))
             .app_data(web::Data::new(pdf_service.clone()))
             .app_data(web::Data::new(operation_service.clone()))
             .app_data(web::Data::new(email_service.clone()))
+            .app_data(web::Data::new(channel_service.clone()))
+            .app_data(web::Data::new(notification_service.clone()))
             .configure(app::init_app)
     })
     .workers(1)

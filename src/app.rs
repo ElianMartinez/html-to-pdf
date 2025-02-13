@@ -1,14 +1,15 @@
-//! app.rs
-
-use crate::handlers::{email_handler, operation_handler, pdf_handler};
 use actix_web::web;
+
+use crate::handlers::{email_handler, notification_handler, operation_handler, pdf_handler};
 
 pub fn init_app(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api")
+            // Rutas PDF
             .service(
                 web::scope("/pdf").route("", web::post().to(pdf_handler::generate_pdf_endpoint)),
             )
+            // Rutas de operaciones
             .service(
                 web::scope("/operations")
                     .route(
@@ -24,17 +25,22 @@ pub fn init_app(cfg: &mut web::ServiceConfig) {
                         web::get().to(operation_handler::get_operation_endpoint),
                     ),
             )
+            // Rutas de email
             .service(
                 web::scope("/email")
                     .route(
-                        "/send",
+                        "/send-unified",
                         web::post().to(email_handler::send_universal_email_endpoint),
                     )
-                    // Consulta de estado
                     .route(
                         "/status/{op_id}",
                         web::get().to(email_handler::email_status_endpoint),
                     ),
-            ),
+            )
+            // Rutas de notificaciones unificadas
+            .service(web::scope("/notifications").route(
+                "/send",
+                web::post().to(notification_handler::send_unified_notification_endpoint),
+            )),
     );
 }

@@ -1,6 +1,9 @@
 //! handlers/pdf_handler.rs
 //! Endpoint para generar PDFs.
 
+use std::path::PathBuf;
+
+use actix_files::NamedFile;
 use actix_web::{web, HttpResponse};
 use log::error;
 
@@ -43,4 +46,18 @@ pub async fn generate_pdf_endpoint(
             })
         }
     }
+}
+
+/// GET /api/pdf/local/{filename}
+/// Sirve un archivo PDF que haya sido guardado en disco.
+///
+/// Ejemplo de URL: http://localhost:5022/api/pdf/local/XXXXX_document.pdf
+pub async fn serve_local_pdf(path: web::Path<String>) -> Result<NamedFile, std::io::Error> {
+    let filename = path.into_inner();
+    // Carpeta donde guardamos los PDFs:
+    let pdf_path = format!("./files/pdfs/{}", filename);
+
+    // Actix Files gestiona los headers de Content-Type apropiados.
+    // Retorna 404 si no existe.
+    Ok(NamedFile::open(PathBuf::from(pdf_path))?)
 }

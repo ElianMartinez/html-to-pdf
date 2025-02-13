@@ -62,6 +62,10 @@ pub struct PdfRequest {
     /// Factor de escala (zoom). Ej: 1.0 (100%), 0.8 (80%), etc.
     /// Si es None, se asume 1.0
     pub scale: Option<f64>,
+
+    /// NUEVO: si es true, además de generar el PDF en memoria,
+    /// lo guardaremos en disco en ./files/pdfs.
+    pub store_local_pdf: Option<bool>,
 }
 
 /// Respuesta genérica
@@ -86,6 +90,7 @@ impl Default for PdfRequest {
                 right: 10.0,
             }),
             scale: Some(1.0),
+            store_local_pdf: Some(false),
         }
     }
 }
