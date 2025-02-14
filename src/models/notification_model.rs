@@ -49,6 +49,7 @@ pub struct EmailConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct WhatsAppConfig {
     pub recipients: Vec<String>,
+    pub message: Option<String>,
 }
 
 /// Respuesta genérica

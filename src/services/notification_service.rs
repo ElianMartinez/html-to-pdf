@@ -5,8 +5,7 @@ use std::env;
 
 use crate::{
     models::{
-        email_model::EmailAttachment,
-        notification_model::{NotificationRequest, WhatsAppConfig},
+        email_model::EmailAttachment, notification_model::NotificationRequest,
         pdf_model::PdfRequest,
     },
     services::{
@@ -333,6 +332,7 @@ impl NotificationService {
             .as_ref()
             .ok_or_else(|| anyhow!("No se proporcionó whatsapp_config"))?;
         let recipients = &wa_config.recipients;
+        let message = wa_config.message.clone().unwrap_or_default();
         log::info!("(send_via_whatsapp) recipients={:?}", recipients);
 
         // 1) Revisar si la sesión está conectada
@@ -375,7 +375,7 @@ impl NotificationService {
         }
 
         // 2) Enviar mensaje de texto
-        if let Some(body_txt) = &req.body {
+        if message.len() > 0 {
             log::info!(
                 "(send_via_whatsapp) Enviando texto a {} destinatarios...",
                 recipients.len()
@@ -384,13 +384,13 @@ impl NotificationService {
                 log::info!(
                     "(send_via_whatsapp) -> chat_id='{}', body='{}'",
                     chat_id,
-                    body_txt
+                    message
                 );
                 let send_url = format!("{}/client/sendMessage/{}", base_url, session_id);
                 let payload = serde_json::json!({
                     "chatId": chat_id,
                     "contentType": "string",
-                    "content": body_txt
+                    "content": message
                 });
 
                 let r = self
@@ -483,131 +483,131 @@ impl NotificationService {
         Ok(())
     }
 
-    /// (Opcional) Reintento de canales fallidos/pending
-    pub async fn reattempt_failed_channels(&self) -> Result<()> {
-        let max_retries = 5;
+    // pub async fn reattempt_failed_channels(&self) -> Result<()> {
+    //     let max_retries = 5;
 
-        log::info!(
-            "(reattempt_failed_channels) Iniciando reintentos para attempts < {}",
-            max_retries
-        );
+    //     log::info!(
+    //         "(reattempt_failed_channels) Iniciando reintentos para attempts < {}",
+    //         max_retries
+    //     );
 
-        // Buscar operation_channels en failed/pending con attempts < max
-        let rows = sqlx::query!(
-            r#"
-            SELECT id, operation_id, channel, attempts
-            FROM operation_channels
-            WHERE (status='failed' OR status='pending')
-              AND attempts < ?1
-            "#,
-            max_retries
-        )
-        .fetch_all(&self.db_pool)
-        .await?;
+    //     // Buscar operation_channels en failed/pending con attempts < max
+    //     let rows = sqlx::query!(
+    //         r#"
+    //         SELECT id, operation_id, channel, attempts
+    //         FROM operation_channels
+    //         WHERE (status='failed' OR status='pending')
+    //           AND attempts < ?1
+    //         "#,
+    //         max_retries
+    //     )
+    //     .fetch_all(&self.db_pool)
+    //     .await?;
 
-        log::info!(
-            "(reattempt_failed_channels) Se encontraron {} canales para reintentar.",
-            rows.len()
-        );
+    //     log::info!(
+    //         "(reattempt_failed_channels) Se encontraron {} canales para reintentar.",
+    //         rows.len()
+    //     );
 
-        for row in rows {
-            let ch_id = match row.id {
-                Some(val) => val,
-                None => {
-                    log::error!("(reattempt_failed_channels) Canal sin ID, ignorando...");
-                    continue;
-                }
-            };
-            let op_id = row.operation_id.clone();
-            let channel_name = row.channel.clone();
-            let attempts = row.attempts;
+    //     for row in rows {
+    //         let ch_id = match row.id {
+    //             Some(val) => val,
+    //             None => {
+    //                 log::error!("(reattempt_failed_channels) Canal sin ID, ignorando...");
+    //                 continue;
+    //             }
+    //         };
+    //         let op_id = row.operation_id.clone();
+    //         let channel_name = row.channel.clone();
+    //         let attempts = row.attempts;
 
-            log::info!(
-                "(reattempt_failed_channels) Reintentando canal='{}', op_id='{}', attempts={}",
-                channel_name,
-                op_id,
-                attempts
-            );
+    //         log::info!(
+    //             "(reattempt_failed_channels) Reintentando canal='{}', op_id='{}', attempts={}",
+    //             channel_name,
+    //             op_id,
+    //             attempts
+    //         );
 
-            // Poner en running, attempts++
-            self.channel_service
-                .update_channel_status(&ch_id, "running", None, true)
-                .await?;
+    //         // Poner en running, attempts++
+    //         self.channel_service
+    //             .update_channel_status(&ch_id, "running", None, true)
+    //             .await?;
 
-            // En un proyecto real, necesitas recargar la info original
-            // (NotificationRequest). Aquí se simplifica.
-            let result = if channel_name == "whatsapp" {
-                log::info!(
-                    "(reattempt_failed_channels) Reintentando WhatsApp con request dummy..."
-                );
-                let dummy_req = NotificationRequest {
-                    channels: vec!["whatsapp".to_string()],
-                    email_config: None,
-                    whatsapp_config: Some(WhatsAppConfig {
-                        recipients: vec!["123456789@c.us".to_string()],
-                    }),
-                    subject: Some("Reintento".to_string()),
-                    body: Some("Mensaje reintentado".to_string()),
-                    async_send: false,
-                    pdf_html: None,
-                    pdf_orientation: None,
-                    pdf_page_size_preset: None,
-                    pdf_custom_page_size: None,
-                    pdf_margins: None,
-                    pdf_scale: None,
-                    pdf_attachment_name: None,
-                    other_attachments: None,
-                };
-                // Sin adjuntos
-                self.send_via_whatsapp(&op_id, &dummy_req, &[]).await
-            } else if channel_name == "email" {
-                log::info!("(reattempt_failed_channels) Reintento de email no implementado.");
-                Err(anyhow!("Reintento de email no implementado"))
-            } else {
-                let msg = format!("Canal desconocido: {}", channel_name);
-                log::error!("(reattempt_failed_channels) {}", msg);
-                Err(anyhow!(msg))
-            };
+    //         // En un proyecto real, necesitas recargar la info original
+    //         // (NotificationRequest). Aquí se simplifica.
+    //         let result = if channel_name == "whatsapp" {
+    //             log::info!(
+    //                 "(reattempt_failed_channels) Reintentando WhatsApp con request dummy..."
+    //             );
+    //             let dummy_req = NotificationRequest {
+    //                 channels: vec!["whatsapp".to_string()],
+    //                 email_config: None,
+    //                 whatsapp_config: Some(WhatsAppConfig {
+    //                     recipients: vec!["123456789@c.us".to_string()],
 
-            match result {
-                Ok(_) => {
-                    log::info!(
-                        "(reattempt_failed_channels) Reintento canal='{}' -> success. Marcando done.",
-                        channel_name
-                    );
-                    self.channel_service
-                        .update_channel_status(&ch_id, "done", None, false)
-                        .await?;
-                }
-                Err(e) => {
-                    log::error!(
-                        "(reattempt_failed_channels) Reintento canal='{}' -> error: {:?}",
-                        channel_name,
-                        e
-                    );
-                    self.channel_service
-                        .update_channel_status(&ch_id, "failed", Some(&format!("{:?}", e)), false)
-                        .await?;
-                }
-            }
+    //                 }),
+    //                 subject: Some("Reintento".to_string()),
+    //                 body: Some("Mensaje reintentado".to_string()),
+    //                 async_send: false,
+    //                 pdf_html: None,
+    //                 pdf_orientation: None,
+    //                 pdf_page_size_preset: None,
+    //                 pdf_custom_page_size: None,
+    //                 pdf_margins: None,
+    //                 pdf_scale: None,
+    //                 pdf_attachment_name: None,
+    //                 other_attachments: None,
+    //             };
+    //             // Sin adjuntos
+    //             self.send_via_whatsapp(&op_id, &dummy_req, &[]).await
+    //         } else if channel_name == "email" {
+    //             log::info!("(reattempt_failed_channels) Reintento de email no implementado.");
+    //             Err(anyhow!("Reintento de email no implementado"))
+    //         } else {
+    //             let msg = format!("Canal desconocido: {}", channel_name);
+    //             log::error!("(reattempt_failed_channels) {}", msg);
+    //             Err(anyhow!(msg))
+    //         };
 
-            // Revisa si todos los canales quedaron done => op done
-            let channels = self
-                .channel_service
-                .list_channels_for_operation(&op_id)
-                .await?;
-            let all_done = channels.iter().all(|ch| ch.status == "done");
-            if all_done {
-                log::info!(
-                    "(reattempt_failed_channels) Todos los canales 'done' para op_id='{}'. Marcando operation done.",
-                    op_id
-                );
-                self.operation_service
-                    .update_operation_status(&op_id, "done", None)
-                    .await?;
-            }
-        }
+    //         match result {
+    //             Ok(_) => {
+    //                 log::info!(
+    //                     "(reattempt_failed_channels) Reintento canal='{}' -> success. Marcando done.",
+    //                     channel_name
+    //                 );
+    //                 self.channel_service
+    //                     .update_channel_status(&ch_id, "done", None, false)
+    //                     .await?;
+    //             }
+    //             Err(e) => {
+    //                 log::error!(
+    //                     "(reattempt_failed_channels) Reintento canal='{}' -> error: {:?}",
+    //                     channel_name,
+    //                     e
+    //                 );
+    //                 self.channel_service
+    //                     .update_channel_status(&ch_id, "failed", Some(&format!("{:?}", e)), false)
+    //                     .await?;
+    //             }
+    //         }
 
-        Ok(())
-    }
+    //         // Revisa si todos los canales quedaron done => op done
+    //         let channels = self
+    //             .channel_service
+    //             .list_channels_for_operation(&op_id)
+    //             .await?;
+    //         let all_done = channels.iter().all(|ch| ch.status == "done");
+    //         if all_done {
+    //             log::info!(
+    //                 "(reattempt_failed_channels) Todos los canales 'done' para op_id='{}'. Marcando operation done.",
+    //                 op_id
+    //             );
+    //             self.operation_service
+    //                 .update_operation_status(&op_id, "done", None)
+    //                 .await?;
+    //         }
+    //     }
+
+    //     Ok(())
+    // }
 }
