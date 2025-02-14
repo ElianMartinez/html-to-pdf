@@ -1,5 +1,9 @@
-use actix_web::{web, App, HttpServer};
+use actix_web::{
+    dev::{Service, ServiceRequest, ServiceResponse, Transform},
+    web, App, Error, HttpResponse, HttpServer,
+};
 use dotenv::dotenv;
+use serde_json::json;
 use services::notification_channel_service::NotificationChannelService;
 use services::notification_service::NotificationService;
 use sqlx::{Pool, Sqlite};
@@ -15,6 +19,75 @@ mod handlers;
 mod logger;
 mod models;
 mod services;
+
+pub struct ApiKeyMiddleware;
+
+impl<S> Transform<S, ServiceRequest> for ApiKeyMiddleware
+where
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
+{
+    type Response = ServiceResponse;
+    type Error = Error;
+    type InitError = ();
+    type Transform = ApiKeyMiddlewareService<S>;
+    type Future = std::future::Ready<Result<Self::Transform, Self::InitError>>;
+
+    // Usamos la sintaxis completamente calificada para evitar ambigüedad
+    fn new_transform(&self, service: S) -> <Self as Transform<S, ServiceRequest>>::Future {
+        std::future::ready(Ok(ApiKeyMiddlewareService { service }))
+    }
+}
+
+pub struct ApiKeyMiddlewareService<S> {
+    service: S,
+}
+
+impl<S> Service<ServiceRequest> for ApiKeyMiddlewareService<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
+{
+    type Response = ServiceResponse;
+    type Error = Error;
+    type Future =
+        std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>>>>;
+
+    fn poll_ready(
+        &self,
+        ctx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(ctx)
+    }
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let api_key = std::env::var("API_KEY").unwrap_or_default();
+
+        if api_key.is_empty() {
+            log::warn!("API_KEY no está configurada");
+            let response = req.into_response(
+                HttpResponse::InternalServerError()
+                    .json(json!({ "error": "API key no configurada en el servidor" })),
+            );
+            return Box::pin(std::future::ready(Ok(response)));
+        }
+
+        match req.headers().get("X-API-Key") {
+            Some(key) if key.to_str().unwrap_or_default() == api_key => {
+                let fut = self.service.call(req);
+                Box::pin(async move {
+                    let res = fut.await?;
+                    Ok(res)
+                })
+            }
+            _ => {
+                let response = req.into_response(
+                    HttpResponse::Unauthorized()
+                        .json(json!({ "error": "API key inválida o faltante" })),
+                );
+                Box::pin(std::future::ready(Ok(response)))
+            }
+        }
+    }
+}
 
 async fn setup_database() -> Pool<Sqlite> {
     // 1) Crear carpeta "data"
@@ -77,21 +150,12 @@ async fn main() -> std::io::Result<()> {
         channel_service.clone(),
     );
 
-    // let notif_service_clone = notification_service.clone();
-    // tokio::spawn(async move {
-    //     loop {
-    //         if let Err(e) = notif_service_clone.reattempt_failed_channels().await {
-    //             eprintln!("Error en reintento: {:?}", e);
-    //         }
-    //         tokio::time::sleep(std::time::Duration::from_secs(300)).await; // 5 min
-    //     }
-    // });
-
     // Levantar servidor
     log::info!("Levantando servidor en 0.0.0.0:5022");
     HttpServer::new(move || {
         App::new()
             // Aumentar límite si recibes JSON muy grandes
+            .wrap(ApiKeyMiddleware)
             .app_data(web::Data::new(pdf_service.clone()))
             .app_data(web::Data::new(operation_service.clone()))
             .app_data(web::Data::new(email_service.clone()))
