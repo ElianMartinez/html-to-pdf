@@ -1,14 +1,17 @@
 //! logger.rs
 //! Configuración del logger usando env_logger.
 
-use env_logger;
+use std::fs::File;
+
+use env_logger::{Builder, Target};
 
 pub fn init_logger() {
-    // Podrías leer la variable RUST_LOG del entorno (por ejemplo)
-    // para configurar el nivel de logs. Si no está, definimos un default.
-    let log_env = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    let stdout = File::create("/var/log/pdf_service.log").unwrap();
+    let _stderr = File::create("/var/log/pdf_service.error.log").unwrap();
 
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_env))
+    Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
         .format_timestamp_secs()
+        .target(Target::Pipe(Box::new(stdout))) // logs normales a stdout
+        .write_style(env_logger::WriteStyle::Never)
         .init();
 }
