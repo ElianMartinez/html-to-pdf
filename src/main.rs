@@ -154,8 +154,9 @@ async fn main() -> std::io::Result<()> {
     log::info!("Levantando servidor en 0.0.0.0:5022");
     HttpServer::new(move || {
         App::new()
-            // Aumentar límite si recibes JSON muy grandes
             .wrap(ApiKeyMiddleware)
+            // Configurar límite de payload a 100MB (104857600 bytes)
+            .app_data(web::JsonConfig::default().limit(204857600))
             .app_data(web::Data::new(pdf_service.clone()))
             .app_data(web::Data::new(operation_service.clone()))
             .app_data(web::Data::new(email_service.clone()))
