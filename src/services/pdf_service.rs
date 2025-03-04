@@ -16,7 +16,7 @@ use uuid::Uuid;
 /// Cantidad máxima de wkhtmltopdf simultáneos
 const MAX_CONCURRENT_PROCESSES: usize = 8;
 /// Tiempo máximo para generar un PDF
-const PDF_GENERATION_TIMEOUT: Duration = Duration::from_secs(120);
+const PDF_GENERATION_TIMEOUT: Duration = Duration::from_secs(300);
 /// Prefijo de carpeta temporal
 const TEMP_DIR_PREFIX: &str = "pdf_service_";
 
